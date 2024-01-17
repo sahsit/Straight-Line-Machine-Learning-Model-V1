@@ -1,0 +1,187 @@
+
+import numpy as np
+import pylab
+import torch
+from torch import nn
+# torch.nn: https://pytorch.org/docs/stable/nn.html
+
+import matplotlib.pyplot as plt
+
+# 1. Data (preparing and loading data)
+# - get data into numerical representation
+# - build a model that finds patterns in those numbers
+
+weight = 0.7
+bias = 0.3
+
+# torch.arange returns a 1D tensor that goes from 0-1 and 
+# steps by 0.02 
+start = 0
+end = 1
+step = 0.02
+X = torch.arange(start, end, step).unsqueeze(dim=1)
+
+
+y = weight * X + bias
+# our known formula
+
+# X is our input numbers, and y is our output, machine needs to
+# figure out what the y is
+# print(f"x axis numbers: {X[:10]}")
+# print(f"y axis numbers: {y[:10]}")
+
+
+# Now, let's create a training and test set
+train_split = int(0.8 * len(X))
+X_train = X[:train_split]
+y_train = y[:train_split]
+X_test = X[train_split:]
+y_test = y[train_split:]
+
+# Plot this formula
+def plot_predictions(train_data = X_train, train_labels = y_train, 
+                     test_data = X_test, test_labels = y_test, 
+                     predictions = None):
+    plt.figure(figsize = (10, 10))
+    a = plt.scatter(train_data, train_labels, c = "b", s = 4, label = "Training data")
+    b = plt.scatter(test_data, test_labels, c = "g", s = 4, label = "Testing data")
+    if predictions is not None:
+        c = plt.scatter(test_data, predictions, c = "r", s = 4, label = "Predictions")
+        return c
+    plt.legend(prop={"size": 14})
+    return a, b
+    
+# To plot the function using matplotlib
+# https://sites.google.com/site/kittipat/programming-with-python/howtoplotagraphusingmatplotlibineclipse
+
+
+
+
+# 2. Creating our model
+
+class LinearRegressionModel(nn.Module):
+    # almost everything in PyTorch inherits from nn.Module
+    def __init__(self):
+        super().__init__()
+        self.weights = nn.Parameter(torch.randn(1, requires_grad = True,
+                                                dtype = torch.float))
+        self.bias = nn.Parameter(torch.randn(1, requires_grad = True,
+                                                dtype = torch.float))
+        
+    # Forward method to define the computation in the model
+    def forward(self, x: torch.Tensor) -> torch.Tensor: 
+        # below is the function we hard-coded above (y = mx+b)
+        return self.weights * x + self.bias
+    # basically, we're given x to this function and create 
+    # random parameters for the numbers we're supposed to
+    # figure out (bias and weight) and overtime, we have to 
+    # figure out what self.weights and self.bias is
+
+# Looking at the parameters of our model
+    # creating a manual seed for our self.weights and self.bias bc if
+    # we didn't, then we'd end up with different numbers every time
+torch.manual_seed(42)
+# Creating an instance of the model
+model_0 = LinearRegressionModel()
+# Printing the parameters of the model
+parameters = model_0.state_dict()
+# print(f"Original parameters: {parameters}")
+
+
+       
+       
+# Predicting what our outputs can be with random parameters
+    # our weights and bias haven't had time to learn so the model
+    # is just predicting off of random weights and bias, so it'll be
+    # wrong (using inference mode turns off gradient descent and other things
+    # because we're just testing our model
+# with torch.inference_mode():
+#     y_preds = model_0(X_test)
+
+
+
+
+
+# 3. Training our model
+    # A way to measure how bad your models predictions is,
+    # is to use a loss function (lower loss function is better)
+    # Loss function: how bad our model's predictions are
+    # Optimizer: Adjusts parameters based on loss function
+    # We need a training loop and testing loop
+    
+# Loss function (using Mean Absolute Value loss function, which
+# measures the distance between the predictions and the actual labels
+# and takes the mean)
+loss_fn = nn.L1Loss()
+
+# Setup an optimizer (stochastic gradient descent)
+    # params = the parameters we want to optimize
+    # lr (learning rate) = tells the optimizer how big of a step
+    # to take when it's wrong
+optimizer = torch.optim.SGD(params = model_0.parameters(), lr = 0.01)
+
+
+# Building a training and testing loop
+    # 0. Loop through the data
+    # 1. Forward pass to make predictions on data (forward propogation)
+    # 2. Calculate the loss
+    # 3. Optimizer zero grad
+    # 4. Loss backward - moves backward thru network to calc gradient
+    # 5. Optimizer step - use optimizer against model's parameters to improve loss
+
+
+torch.manual_seed(42)
+# Epoch = one loop thru the data     
+epochs = 1000
+
+# Track some values
+epoch_count = []
+loss_values = []
+test_loss_values = []
+
+    # 0.
+for epoch in range(epochs):
+    model_0.train() # <- train mode sets everything to "on"
+    # 1. give the real x values to forward method
+    y_pred = model_0(X_train)
+    # 2. use loss fn to see how wrong our predictions are
+    loss = loss_fn(y_pred, y_train)
+    
+    # 3. as the optimizer step goes on, it accumulates so it just
+    # gets bigger and bigger, we want it to restart at 0 every time
+    optimizer.zero_grad() 
+    # 4. 
+    loss.backward()
+    # 5. 
+    optimizer.step()
+
+    # Now the testing loop (.eval turns off settings not needed
+    # when testing
+    model_0.eval()
+    with torch.inference_mode(): #turns off gradient tracking and other things
+        # 1. Forward pass still
+        test_pred = model_0(X_test)
+        # 2. Calculate loss
+        test_loss = loss_fn(test_pred, y_test)
+    if epoch % 100 == 0:
+        epoch_count.append(epoch)
+        loss_values.append(loss)
+        test_loss_values.append(test_loss)
+        print(f"Epoch: {epoch} | Loss: {loss} | Test Loss: {test_loss}")
+        parameters = model_0.state_dict()
+        print(f"{parameters}")
+
+print(plot_predictions(predictions = test_pred))
+pylab.show()
+
+
+
+# Plot the loss curves now 
+a = plt.plot(epoch_count, np.array(torch.tensor(loss_values).numpy()), label = "Train loss")
+b = plt.plot(epoch_count, test_loss_values, label = "Test loss")
+plt.title("Training and test loss curves")
+plt.ylabel("Loss")
+plt.xlabel("Epochs")
+plt.legend()
+print(a, b)
+pylab.show()
